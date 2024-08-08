@@ -65,16 +65,6 @@ impl Emulator {
         new_emulator
     }
 
-    fn push(&mut self, val: u16) {
-        self.stack[self.sp as usize] = val;
-        self.sp += 1;
-    }
-
-    fn pop(&mut self) -> u16 {
-        self.sp -= 1;
-        self.stack[self.sp as usize]
-    }
-
     pub fn reset(&mut self) {
         self.pc = START_ADDR;
         self.ram = [0; RAM_SIZE];
@@ -88,4 +78,61 @@ impl Emulator {
         self.st = 0;
         self.ram[..FONTSET_SIZE].copy_from_slice(&FONTSET);
     }
+
+    fn push(&mut self, val: u16) {
+        self.stack[self.sp as usize] = val;
+        self.sp += 1;
+    }
+
+    fn pop(&mut self) -> u16 {
+        self.sp -= 1;
+        self.stack[self.sp as usize]
+    }
+
+    pub fn tick(&mut self) {
+        let op = self.fetch();
+        self.execute(op);
+    }
+
+    fn execute(&mut self, op: u16) {
+        let digit1 = (op & 0xF000) >> 12;
+        let digit2 = (op & 0x0F00) >> 8;
+        let digit3 = (op & 0x00F0) >> 4;
+        let digit4 = op & 0x000F;
+
+        match (digit1, digit2, digit3, digit4) {
+            (0, 0, 0, 0)    => (),
+            (0, 0, 0xE, 0)  => {        // clear screen opcode
+                self.screen = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
+            }
+            (0, 0, 0xE, 0xE)  => {      // return from subroutine
+                let ret_addr = self.pop();
+                self.pc = ret_addr;
+            }
+            (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
+        }
+    }
+
+    pub fn tick_timers(&mut self) {
+        if self.dt > 0 {
+            self.dt -= 1;
+        }
+
+        if self.st > 0 {
+            if self.st == 1 {
+                println!("Sound not implemented!");
+            }
+            self.st -= 1;
+        }
+    }
+
+    fn fetch(&mut self) -> u16 {
+        // all opcodes are 2 bytes
+        let higher_byte = self.ram[self.pc as usize] as u16;
+        let lower_byte = self.ram[(self.pc + 1) as usize] as u16;
+        let op = (higher_byte << 8) | lower_byte;
+        self.pc += 2;
+        op
+    }
+
 }
